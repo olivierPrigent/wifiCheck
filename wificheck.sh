@@ -30,10 +30,10 @@
 
 
 ##uncomment for debug mode in file debug_output.txt in local repository
-exec 5> debug_output.txt
-BASH_XTRACEFD="5"
-PS4='$LINENO: '
-set -x
+#exec 5> debug_output.txt
+#BASH_XTRACEFD="5"
+#PS4='$LINENO: '
+#set -x
 
 shopt -s nullglob
 
@@ -63,7 +63,7 @@ declare lsmod_variable
 help() {
   echo ""
   echo "wifiCheck is a program that prints wifi info, originally created to help in the French Ubuntu forum."
-  echo "French is the default language, and bbscode is the default output."
+  echo "French is the default language, and BBCode is the default output."
   echo ""
   echo "USAGE:"
   echo " ./wificheck.sh [options]"
@@ -484,7 +484,6 @@ esac
 
 ## open graphical text editor and print nothing on terminal (otherwise terminal won't close)
 xdg-open ~/wificheck.log 1>/dev/null 2>&1
-
 
 
 
