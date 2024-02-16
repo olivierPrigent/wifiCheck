@@ -29,7 +29,7 @@
 #############################################################################################################################################
 
 
-##uncomment for debug mode in file debug_output.txt in local repository
+##uncomment for debug mode in file debug_output.txt located fin local repository
 #exec 5> debug_output.txt
 #BASH_XTRACEFD="5"
 #PS4='$LINENO: '
@@ -38,43 +38,53 @@
 shopt -s nullglob
 
 # Set language as enum : french = 0 ; english = 1 ; chinese = 2 . Default is french.
-declare -i language
-language=0
+declare -i which_language
+which_language=0
 
-# Set as enum if wificheck prints the short output without iw commands
-# or the long output with iw commands
-# this mainly because iw is not installed by default, and is quite long as it adds 300 lines minimum.
+# Set as enum if wificheck prints the short output, the long output or the very long output
 # short = 0 ; long = 1 ; very long = 2
-declare -i short_or_long_output
-short_or_long_output=0
+declare -i which_version
+which_version=0
 
 # set as enum to print bbcode for french forum
 # with bbcode = 0 ; without bbcode = 1
-declare -i print_bbcode_or_not
-print_bbcode_or_not=0
+declare -i is_bbcode
+is_bbcode=0
 
-#variables array for lsmod and modinfo
+# variables array that store modules names for lsmod and modinfo
 declare -a modules_array
+
+# store lsmod result
 declare lsmod_variable
 
+# variable associative array used to check with command -v if a commande is installed or not. the key is the command, and the value is the package which contains the command
+declare -A command_array
+command_array=([uname]="coreutils" [lsb_release]="lsb-release" [lspci]="pciutils" [lshw]="lshw" [lsusb]="usbutils" [lsmod]="kmod" [dkms]="dkms" [mokutil]="mokutil" [rfkill]="rfkill" [ip]="iproute2" [ping]="iputils-ping" [resolvectl]="systemd" [ufw]="ufw" [nmcli]="network-manager" [iw]="iw" [modinfo]="kmod" [systemctl]="systemd" [iptables]="iptables" [xdg-open]="xdg-utils" [pccardctl]="pcmciautils")
+
+# variable used with command_array
+declare key
 
 
 # print help on stdout with -h or bad argument
 help() {
   echo ""
   echo "wifiCheck is a program that prints wifi info, originally created to help in the French Ubuntu forum."
-  echo "French is the default language, and BBCode is the default output."
+  echo "French is the default language in the terminal output to indicate the file location,"
+  echo  "and BBCode is the default output for easy pasting in french forum."
   echo ""
   echo "USAGE:"
   echo " ./wificheck.sh [options]"
   echo ""
-  echo " -l    print long version with iw commands; if iw package is not present, switch to short version"
-  echo " -v    print a very long version with a scan"
-  echo " -s    print short version, default behavior"
-  echo " -e    print english version"
-  echo " -c    print chinese version"
+  echo " -s    print short version (most usefull commands), default behavior"
+  echo " -l    print long version (more detailed)"
+  echo " -v    print a very long version (with iw scan, iw list, plus all iptables)"
+  echo " -e    print english version in the terminal output"
+  echo " -c    print chinese version in the terminal output"
   echo " -n    doesn't print bbcode"
   echo " -h    print help"
+  echo ""
+  echo "       More at https://github.com/olivierPrigent/wifiCheck/tree/main"
+  echo ""
   exit 0
 }
 
@@ -84,96 +94,172 @@ help() {
 
 
 
-# Main function
+# Main function for short version
 wificheck_function() {
   echo      "###############################################"
   echo      "###########    Wifi Check    ##################"
+  echo      "###########    $(printf '%(%Y-%m-%d)T\n' -1)    ##################"
   echo      "###############################################"
 
 
 
-  echo -e "\n\n############     Date     #####################\n"
-  printf '%(%Y-%m-%d)T\n' -1
-
-
   echo -e "\n\n#####  Current kernel, release, desktop  ######\n"
+  key="uname"
+  if (command -v "$key")  &>/dev/null ; then
+    local uname
+    uname=$(uname "-r")
+    echo -e " Current Kernel      :  ${uname} "
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 
-  local uname
-  uname=$(uname "-r")
-  echo -e " Current Kernel      :  ${uname} "
-
-  local release
-  release=$(lsb_release "-d")
-  echo -e " Release  ${release} "
+  key="lsb_release"
+  if (command -v "$key")  &>/dev/null ; then
+    local release
+    release=$(lsb_release "-d")
+    echo -e " Release  ${release} "
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 
   echo    " Current Desktop     :  $XDG_CURRENT_DESKTOP"
 
 
-  echo -e "\n\n####### lspci -k -nn | grep -A 3 -i net  ######\n"
-  lspci -k -nn | grep -A 3 -i net
 
-
-  echo -e "\n\n########     sudo lshw -C network     #########\n"
-  sudo lshw -C network
-
-
-  echo -e "\n\n################     lsusb     ################\n"
-  lsusb
-
-
-  echo -e "\n\n#######   lsmod | grep <wifi_modules>   #######\n"
-  lsmod_function
-
-
-  echo -e "\n\n#################  dkms status  ###############\n"
-  if [[ "$(which "dkms")" = "" ]]; then
-   case ${language} in
-    0)
-      echo "le paquet dkms n'est pas présent"
-      ;;
-
-    1)
-      echo "dkms package is not available"
-      ;;
-
-    2)
-      echo "dkms软件包不可用"
-      ;;
-    esac
+  echo -e "\n\n################     nmcli    #################\n"
+  key="nmcli"
+  if (command -v "$key")  &>/dev/null ; then
+    nmcli | head -n -3
   else
-    dkms status
+    echo "command $key is not present you should install ${command_array[$key]} package"
   fi
 
 
+
+  echo -e "\n\n##############    iw dev   ####################\n"
+  key="iw"
+  if (command -v "$key")  &>/dev/null ; then
+    iw dev
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
+
+  echo -e "\n\n###########    nmcli dev wifi    ##############\n"
+  key="nmcli"
+  if (command -v "$key")  &>/dev/null ; then
+    nmcli dev wifi
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
+
+  echo -e "\n\n################     lsusb     ################\n"
+  key="lsusb"
+  if (command -v "$key")  &>/dev/null ; then
+    lsusb
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
+
+  echo -e "\n\n####### lspci -k -nn | grep -A 3 -i net  ######\n"
+  key="lspci"
+  if (command -v "$key")  &>/dev/null ; then
+    lspci -k -nn | grep -A 3 -i net
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
+
+  echo -e "\n\n#######   lsmod | grep <wifi_modules>   #######\n"
+  key="lsmod"
+  if (command -v "$key")  &>/dev/null ; then
+    lsmod_function
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
+
+  echo -e "\n\n#################  dkms status  ###############\n"
+
+  key="dkms"
+  if (command -v "$key")  &>/dev/null ; then
+    dkms status
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
+
   echo -e "\n\n#########   mokutil --sb-state    #############\n"
-  mokutil --sb-state
+
+  key="mokutil"
+  if (command -v "$key")  &>/dev/null ; then
+    mokutil --sb-state
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
 
 
   echo -e "\n\n##########    sudo rfkill list    #############\n"
-  sudo rfkill list
 
+  key="rfkill"
+  if (command -v "$key")  &>/dev/null ; then
+    sudo rfkill list
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 
-  echo -e "\n\n################    ip a    ###################\n"
-  ip a
 
 
   echo -e "\n\n################    ping no-DNS   ###################\n"
-  ping -q -c1 -w1 $(find_my_gateway) &>/dev/null && echo "ping gateway ipv4 : ok" || echo "ping gateway ipv4 : mauvais !"
-  ping6 -q -c1 -w1 $(find_my_gateway) &>/dev/null && echo "ping gateway ipv6 : ok" || echo "ping gateway ipv6 : mauvais"
-  ping -4 -q -c1 -w1 1.0.0.1 &>/dev/null && echo "ping cloudflare ipv4 : ok" || echo "ping cloudflare ipv4 : mauvais"
-  ping -6 -q -c1 -w1 2606:4700:4700::1001 &>/dev/null && echo "ping cloudflare ipv6 : ok" || echo "ping cloudflare ipv6 : mauvais"
+
+  key="ping"
+  if (command -v "$key")  &>/dev/null ; then
+    ping -q -c1 -w1 $(find_my_gateway) &>/dev/null && echo "ping gateway ipv4 : ok" || echo "ping gateway ipv4 : bad !"
+    ping6 -q -c1 -w1 $(find_my_gateway) &>/dev/null && echo "ping gateway ipv6 : ok" || echo "ping gateway ipv6 : bad !"
+    ping -4 -q -c1 -w1 1.0.0.1 &>/dev/null && echo "ping cloudflare ipv4 : ok" || echo "ping cloudflare ipv4 : bad !"
+    ping -6 -q -c1 -w1 2606:4700:4700::1001 &>/dev/null && echo "ping cloudflare ipv6 : ok" || echo "ping cloudflare ipv6 : bad !"
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 
 
-  echo -e "\n\n#########  resolvectl | grep Server  #########\n"
-  resolvectl | grep Server
 
 
   echo -e "\n\n###########    sudo ufw status    #############\n"
-  sudo ufw status
+  key="ufw"
+  if (command -v "$key")  &>/dev/null ; then
+    sudo ufw status
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+}
+
+
+
+
+
+long_function() {
+  echo -e "\n\n#########  resolvectl | grep Server  #########\n"
+  key="resolvectl"
+  if (command -v "$key")  &>/dev/null ; then
+    resolvectl | grep Server
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
 
 
   echo -e "\n\n######    cat /etc/network/interfaces   #######"
-  case ${language} in
+  case ${which_language} in
     0)
       echo -e "# ce fichier est obsolète sauf si vous savez ce que vous faîtes #\n"
       ;;
@@ -189,79 +275,154 @@ wificheck_function() {
   cat /etc/network/interfaces
 
 
-  echo -e "\n\n###########    nmcli dev show    ##############\n"
-  nmcli d s
+
+  echo -e "\n\n########     sudo lshw -C network     #########\n"
+  key="lshw"
+  if (command -v "$key")  &>/dev/null ; then
+    sudo lshw -C network
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 
 
-  echo -e "\n\n###########    nmcli dev wifi    ##############\n"
-  nmcli dev wifi
-}
+
+  echo -e "\n\n########    PCMCIA card info     #############\n\n"
+  key="pccardctl"
+  if (command -v "$key")  &>/dev/null; then
+      pccardctl info
+  else
+      echo "'pccardctl' is not installed (package \"pcmciautils\")."
+  fi
+
+  echo -e "\n\n################    ip a    ###################\n"
+
+  key="ip"
+  if (command -v "$key")  &>/dev/null ; then
+    ip a
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 
 
-
-
-
-long_function() {
   echo -e "\n\n#######   modinfo <wifi_modules> |grep parm   #######\n"
-  for module in ${modules_array[@]} ; do
+  key="modinfo"
+  if (command -v "$key")  &>/dev/null ; then
+    for module in ${modules_array[@]} ; do
     echo -e "\n  Modules parm for ${module} :"
     modinfo ${module} |grep parm
   done
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
 
   echo -e "\n\n####### systemctl list network units  #########\n"
-  systemctl list-units --type=service --all |grep -iE 'network|wpa'
+  key="systemctl"
+  if (command -v "$key")  &>/dev/null ; then
+    systemctl list-units --type=service --all |grep -iE 'network|wpa'
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
 
 
   echo -e "\n\n########    nmcli connection show   ###########\n"
-  nmcli connection show 2>/dev/null
-
-
-  #echo -e "\n\n#########  time  mtr 8.8.8.8 -rc1   ###########\n"
-  #/usr/bin/env time mtr 8.8.8.8 -rc1 | grep -E "real|user|sys"
+  key="nmcli"
+  if (command -v "$key")  &>/dev/null ; then
+    nmcli connection show 2>/dev/null
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 }
 
 
 
 
-# For long argument. Adds iw commands
-iw_long_function() {
-  echo -e "\n\n##############    iw dev   ####################\n"
-  iw dev
+
+
+# For long argument. Adds iw and nmcli commands that needs interface name. Goes in a for loop in case there are several interfaces.
+interfaces_long_function() {
+  echo -e "\n\n#########    nmcli -f all d show $interface     #############\n"
+  key="nmcli"
+  if (command -v "$key")  &>/dev/null ; then
+    nmcli -f all d show $interface
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
 
   echo -e "\n\n#########    iw dev $interface link    #############\n"
-  iw dev $interface link
-
-  echo -e "\n\n########   iw dev $interface station dump  ###########\n"
-  iw dev $interface station dump
+  key="iw"
+  if (command -v "$key")  &>/dev/null ; then
+    iw dev $interface link
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 }
 
 
 
-### very long version
+
+
+
+### For very long argument. Goes in a for loop in case there are several interfaces.
 very_long_function() {
-  echo -e "\n\n#### iptables -vL -t filter|nat|mangle|raw|security  #####\n"
-  echo "\n    ### table filter ###"
-  sudo iptables -vL -t filter
-  echo "\n    ### table nat ###"
-  sudo iptables -vL -t nat
-  echo "\n    ### table mangle ###"
-  sudo iptables -vL -t mangle
-  echo "\n    ### table raw ###"
-  sudo iptables -vL -t raw
-  echo "\n    ### table security ###"
-  sudo iptables -vL -t security
+key="iptables"
+  if (command -v "$key")  &>/dev/null ; then
+    echo -e "\n\n#### iptables -vL -t filter|nat|mangle|raw|security  #####\n"
+    echo "\n    ### table filter ###"
+    sudo iptables -vL -t filter
+    echo "\n    ### table nat ###"
+    sudo iptables -vL -t nat
+    echo "\n    ### table mangle ###"
+    sudo iptables -vL -t mangle
+    echo "\n    ### table raw ###"
+    sudo iptables -vL -t raw
+    echo "\n    ### table security ###"
+    sudo iptables -vL -t security
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
+
+
+  echo -e "\n\n########   iw list  ###########\n"
+  key="iw"
+  if (command -v "$key")  &>/dev/null ; then
+    iw list
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 }
 
 
 
 
-iw_very_long_function() {
-  echo -e "\n\n########   iw list  ###########\n"
-  iw list
+
+
+## For very long argument. Goes in a for loop in case there are several interfaces.
+interfaces_very_long_function() {
+   echo -e "\n\n########   iw dev $interface station dump  ###########\n"
+  key="iw"
+  if (command -v "$key")  &>/dev/null ; then
+    iw dev $interface station dump
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
 
   echo -e "\n\n############    iw dev $interface scan   ############\n"
-  sudo iw dev $interface scan
+  key="iw"
+  if (command -v "$key")  &>/dev/null ; then
+    sudo iw dev $interface scan
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
 }
+
 
 
 
@@ -298,33 +459,14 @@ lsmod_function() {
 
 
 
-
 ### function for ping printing in wificheck_function
 find_my_gateway() {
   ip route show default | cut -d" " -f3
 }
 
 
-##### function to insert bbcode markup for french forum
-bbcode_open_function() {
-  echo "[code]"
-}
-
-bbcode_close_fonction() {
-  echo "[/code]"
-}
 
 
-# put stdout and stderr in the file wificheck.log in your $HOME
-exec_in_file() {
-  exec 3>&1
-  exec &>~/wificheck.log
-}
-
-# put back stdout on terminal
-exec_in_stdout() {
-  exec >&3-
-}
 
 
 ###### print on terminal at the end
@@ -369,24 +511,24 @@ chinese_terminal_output() {
 while getopts "hslecnv" arg; do
   case $arg in
     l)
-      short_or_long_output=1
+      which_version=1
       ;;
     s)
-      short_or_long_output=0
+      which_version=0
       ;;
     v)
-      short_or_long_output=2
+      which_version=2
       ;;
     e)
-      language=1
+      which_language=1
       ;;
 
     c)
-      language=2
+      which_language=2
       ;;
 
     n)
-      print_bbcode_or_not=1
+      is_bbcode=1
       ;;
 
     h)
@@ -396,39 +538,20 @@ while getopts "hslecnv" arg; do
       echo "Invalid option: -$OPTARG"
       help
       ;;
-#    :)
-#      echo "Option -$OPTARG requires an argument."
-#      help
-#      ;;
   esac
 done
 
 
-# check if iw is present, should be distro free
-if [[ "$(which "iw")" = "" ]] && [[ ${short_or_long_output} -gt 1 ]] ; then
-    short_or_long_output=0
 
-    case ${language} in
-    0)
-      echo "le paquet iw n'est pas présent"
-      ;;
-
-    1)
-      echo "iw package is not available"
-      ;;
-
-    2)
-      echo "iw软件包不可用"
-      ;;
-    esac
-fi
+## print stderr and stdout in file
+exec 3>&1
+exec &>~/wificheck.log
 
 
 
-exec_in_file
-
-if [[ ${print_bbcode_or_not} -eq 0 ]]; then
-  bbcode_open_function
+## chech if we print bbcode
+if [[ ${is_bbcode} -eq 0 ]]; then
+  echo "[code]"
 fi
 
 
@@ -437,38 +560,46 @@ wificheck_function
 
 
 
-
-if [[ ${short_or_long_output} -eq 1 ]]; then
+## check if we add long version
+if [[ ${which_version} -eq 1 ]]; then
+  long_function
   for interface in /sys/class/net/w[lw]*; do
     interface=${interface##*/}
-    iw_long_function
+    interfaces_long_function
   done
-  long_function
 fi
 
 
-if [[ ${short_or_long_output} -eq 2 ]]; then
+
+## check if we add very long version
+if [[ ${which_version} -eq 2 ]]; then
+  long_function
   for interface in /sys/class/net/w[lw]*; do
     interface=${interface##*/}
-    iw_long_function
-    iw_very_long_function
+    interfaces_long_function
   done
-  long_function
-  very_long_function
+    very_long_function
+  for interface in /sys/class/net/w[lw]*; do
+    interface=${interface##*/}
+    interfaces_very_long_function
+  done
+
 fi
 
 
-if [[ ${print_bbcode_or_not} -eq 0 ]]; then
-  bbcode_close_fonction
+## chech if we print bbcode
+if [[ ${is_bbcode} -eq 0 ]]; then
+  echo "[/code]"
 fi
 
 
 
-exec_in_stdout
+## Print back on terminal for the file location
+exec >&3-
 
 
-
-case ${language} in
+## check which language to print the file location
+case ${which_language} in
   0)
     french_terminal_output
     ;;
@@ -482,8 +613,16 @@ case ${language} in
     ;;
 esac
 
+
+
 ## open graphical text editor and print nothing on terminal (otherwise terminal won't close)
-xdg-open ~/wificheck.log 1>/dev/null 2>&1
+key="xdg-open"
+  if (command -v "$key")  &>/dev/null ; then
+    xdg-open ~/wificheck.log 1>/dev/null 2>&1
+  else
+    echo "command $key is not present you should install ${command_array[$key]} package"
+  fi
+
 
 
 
