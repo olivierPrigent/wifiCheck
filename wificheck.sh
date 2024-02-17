@@ -434,23 +434,28 @@ lsmod_function() {
   modules_array=("cfg80211")
   lsmod_variable=$(lsmod)
 
-  readarray -t -O"${#modules_array[@]}" modules_array < <(echo "${lsmod_variable}" | grep "cfg80211" | awk '{split($4, a, ","); for (i in a) print a[i]}')
+  readarray -t -d "," -O"${#modules_array[@]}" modules_array <<< ${lsmod_variable} | awk '{if ($1 == "cfg80211") print $4}'
 
-  for i in ${!modules_array[@]} ; do
-  readarray -t -O"${#modules_array[@]}"  modules_array   < <(echo "${lsmod_variable}"  | grep ${modules_array[$i]} | awk '{split($4, a, ","); for (i in a) print a[i]}')
+  for i in "${!modules_array[@]}" ; do
+    readarray -t -O "${#modules_array[@]}"  modules_array   < <(echo "${lsmod_variable}"  | grep "${modules_array[$i]}" | awk '{split($4, a, ","); for (i in a) print a[i]}')
+  done
+
+  for i in "${!modules_array[@]}" ; do
+    readarray -t -O "${#modules_array[@]}"  modules_array   < <(echo "${lsmod_variable}"  | grep "${modules_array[$i]}" | awk '{split($4, a, ","); for (i in a) print a[i]}')
   done
 
   readarray -t modules_array < <(printf "%s\n" "${modules_array[@]}" |sort -u)
 
-  for i in ${!modules_array[@]} ; do
-  readarray -t -O"${#modules_array[@]}"  modules_array   < <(echo "${lsmod_variable}"  | grep "${modules_array[$i]}" | awk '{split($4, a, ","); for (i in a) print a[i]}')
+  for i in "${!modules_array[@]}" ; do
+    readarray -t -O "${#modules_array[@]}"  modules_array   < <(echo "${lsmod_variable}"  | grep "${modules_array[$i]}" | awk '{split($4, a, ","); for (i in a) print a[i]}')
   done
 
   readarray -t modules_array < <(printf "%s\n" "${modules_array[@]}" |sort -u)
+
   echo  "Module                  Size  Used by"
-
-  for i in ${modules_array}; do
-  printf "%s\n" "$(echo "${lsmod_variable}" |grep "${modules_array[i]}" )"
+  length=${#modules_array[@]}
+  for (( j=0; j<length; j++ )); do
+    printf "%s\n" echo "$lsmod_variable" | awk -v word="${modules_array[$j]}" '$1 == word { print }'
   done
 }
 
